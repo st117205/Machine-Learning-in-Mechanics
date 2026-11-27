@@ -1,0 +1,3 @@
+target_scale,best_params,test_mae_db,test_rmse_db,test_r2
+db,{'model__alpha': 0.01},2.493632483260198,3.227338356164077,0.7968205366032408
+log_pressure,{'model__alpha': 0.01},2.4936324832602037,3.227338356164088,0.7968205366032394

@@ -27,6 +27,32 @@ COLUMNS = [
 ]
 TARGET = "spl_db"
 
+# SPL_dB = 20 * log10(p / p_ref).  Working in the logarithmic pressure domain
+# therefore means modelling SPL_dB / 20 and converting predictions back to dB.
+DB_PER_LOG_PRESSURE = 20.0
+TARGET_SCALE = "log_pressure"
+
+
+def to_model_target(y, scale: str = TARGET_SCALE) -> np.ndarray:
+    """Convert SPL in dB to the target scale used for fitting."""
+    values = np.asarray(y, dtype=float)
+    if scale == "db":
+        return values
+    if scale == "log_pressure":
+        return values / DB_PER_LOG_PRESSURE
+    raise ValueError(f"unknown target scale: {scale}")
+
+
+def from_model_target(y_model, scale: str = TARGET_SCALE) -> np.ndarray:
+    """Convert fitted target values back to SPL in dB."""
+    values = np.asarray(y_model, dtype=float)
+    if scale == "db":
+        return values
+    if scale == "log_pressure":
+        return values * DB_PER_LOG_PRESSURE
+    raise ValueError(f"unknown target scale: {scale}")
+
+
 # Physically motivated base set: logarithms of frequency, velocity, chord and
 # boundary-layer thickness plus the geometrical angle of attack.
 PHYSICAL = ["log_f", "log_u", "log_delta", "angle_deg", "log_c"]

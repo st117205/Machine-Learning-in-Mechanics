@@ -9,7 +9,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import GridSearchCV, GroupKFold, KFold, cross_val_predict
 
-from .airfoil import FEATURE_SETS, make_pipeline
+from .airfoil import FEATURE_SETS, from_model_target, make_pipeline
 
 
 def metrics(y_true, y_pred) -> dict:
@@ -66,12 +66,43 @@ def configuration_groups(X: pd.DataFrame) -> np.ndarray:
     return X[keys].astype(str).agg("|".join, axis=1).to_numpy()
 
 
-def grouped_cv_metrics(estimator, X, y, groups, n_splits: int = 5) -> dict:
-    """Diagnostic CV that keeps all frequencies of one configuration together."""
-    pred = cross_val_predict(
-        clone(estimator), X, y, cv=GroupKFold(n_splits=n_splits), groups=groups, n_jobs=-1
+def grouped_cv_metrics(estimator, X, y_fit, groups, target_scale="log_pressure", n_splits: int = 5) -> dict:
+    """Diagnostic CV that keeps all frequencies of one configuration together.
+
+    Metrics are always returned in dB, even when the model was fitted on the
+    logarithmic-pressure target SPL_dB / 20.
+    """
+    pred_fit = cross_val_predict(
+        clone(estimator), X, y_fit, cv=GroupKFold(n_splits=n_splits), groups=groups, n_jobs=-1
     )
-    return metrics(y, pred)
+    return metrics(
+        from_model_target(y_fit, target_scale),
+        from_model_target(pred_fit, target_scale),
+    )
+
+
+def transfer_selection_table(validation: pd.DataFrame) -> pd.DataFrame:
+    """Rank models by worst-case RMSE across held-out velocity regimes."""
+    held = sorted(validation["held_out_U_m_s"].unique())
+    rmse_wide = validation.pivot(index="model", columns="held_out_U_m_s", values="rmse")
+    r2_wide = validation.pivot(index="model", columns="held_out_U_m_s", values="r2")
+
+    rows = []
+    for model in rmse_wide.index:
+        rmse_values = rmse_wide.loc[model, held].to_numpy(dtype=float)
+        r2_values = r2_wide.loc[model, held].to_numpy(dtype=float)
+        row = {"model": model}
+        for speed, value in zip(held, rmse_values):
+            row[f"rmse_U{speed:g}"] = float(value)
+        row["worst_rmse"] = float(np.max(rmse_values))
+        row["mean_rmse"] = float(np.mean(rmse_values))
+        row["worst_r2"] = float(np.min(r2_values))
+        rows.append(row)
+    return (
+        pd.DataFrame(rows)
+        .sort_values(["worst_rmse", "mean_rmse"])
+        .reset_index(drop=True)
+    )
 
 
 def bootstrap_physical_coefficients(X, y, feature_set="physical", n_boot=400, seed=42):

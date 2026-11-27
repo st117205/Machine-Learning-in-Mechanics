@@ -1,0 +1,1 @@
+Choose the model with the smallest worst-case RMSE on the two held-out velocity regimes; break ties by mean RMSE. This measures transfer to unfamiliar regimes instead of random interpolation.
